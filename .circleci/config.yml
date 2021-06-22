@@ -3,11 +3,14 @@ orbs:
   semantic-release: proxyco/semantic-release@3.0.0
 jobs:
   build:
-    working_directory: $GOROOT/app
+    working_directory: ~/repo
     docker:
       - image: circleci/golang:1.15.3
     steps:
       - checkout
+      - run:
+          name: Get dependencies
+          command: go get
       - run:
           name: Build binary
           command: CGO_ENABLE=0 GOOS=linux go build -o vault-init -v .
