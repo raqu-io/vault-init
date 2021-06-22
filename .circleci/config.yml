@@ -1,17 +1,6 @@
 version: 2.1
 orbs:
   semantic-release: proxyco/semantic-release@3.0.0
-workflows:
-  tag:
-    jobs:
-      - build:
-
-      - semantic-release/release:
-          context: global-vars
-          filters:
-            branches:
-              only: /main/
-          config_file: .circleci/.releaserc.yml
 jobs:
   build:
     working_directory: ~/repo
@@ -32,3 +21,15 @@ jobs:
       - run:
           name: Run tests
           command: CGO_ENABLE=0 GOOS=linux go build -o vault-init -v .
+workflows:
+  build:
+    jobs:
+      - build
+  tag:
+    jobs:
+      - semantic-release/release:
+          context: global-vars
+          filters:
+            branches:
+              only: /main/
+          config_file: .circleci/.releaserc.yml
