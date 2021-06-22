@@ -26,11 +26,9 @@ jobs:
           paths:
             - vault-init
 workflows:
-  build:
+  build_and_tag:
     jobs:
       - build
-  tag:
-    jobs:
       - semantic-release/release:
           requires:
             - build
