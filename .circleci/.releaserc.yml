@@ -1,0 +1,23 @@
+---
+packageName: vault-auto-init
+branches:
+  - main
+plugins:
+  - "@semantic-release/commit-analyzer"
+  - [
+      "@semantic-release/github",
+      {
+        "assets": [
+          { "path": "vault-init", "label": "vault-init" }
+        ]
+      }
+  ]
+  - "@semantic-release/release-notes-generator"
+  - [
+      "semantic-release-slack-bot",
+      {
+        "notifyOnSuccess": true,
+        "notifyOnFail": true,
+        "slackWebhook": "https://hooks.slack.com/services/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"
+      }
+  ]
