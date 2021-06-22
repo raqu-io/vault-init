@@ -8,7 +8,7 @@ plugins:
       "@semantic-release/github",
       {
         "assets": [
-          { "path": "vault-init", "label": "vault-init" }
+          { "path": "vault-init", "label": "/tmp/repo/vault-init" }
         ]
       }
   ]

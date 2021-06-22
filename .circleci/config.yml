@@ -3,17 +3,28 @@ orbs:
   semantic-release: proxyco/semantic-release@3.0.0
 jobs:
   build:
-    working_directory: ~/repo
+    working_directory: /tmp/repo
     docker:
       - image: circleci/golang:1.15.3
     steps:
       - checkout
+      - restore_cache:
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
       - run:
           name: Get dependencies
           command: go get
+      - save_cache:
+          key: go-mod-v4-{{ checksum "go.sum" }}
+          paths:
+            - "/go/pkg/mod"
       - run:
           name: Build binary
           command: CGO_ENABLE=0 GOOS=linux go build -o vault-init -v .
+      - persist_to_workspace:
+        root: /tmp/repo
+        paths:
+          - vault-init
 workflows:
   build:
     jobs:
@@ -21,8 +32,13 @@ workflows:
   tag:
     jobs:
       - semantic-release/release:
+          requires:
+            - build
           context: global-vars
           filters:
             branches:
               only: /main/
           config_file: .circleci/.releaserc.yml
+          steps:
+            - attach_workspace:
+              at: /tmp/repo
