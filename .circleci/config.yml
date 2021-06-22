@@ -3,7 +3,7 @@ orbs:
   semantic-release: proxyco/semantic-release@3.0.0
 jobs:
   build:
-    working_directory: /tmp/repo
+    working_directory: ~/project
     docker:
       - image: circleci/golang:1.15.3
     steps:
@@ -22,7 +22,7 @@ jobs:
           name: Build binary
           command: CGO_ENABLE=0 GOOS=linux go build -o vault-init -v .
       - persist_to_workspace:
-        root: /tmp/repo
+        root: ~/project
         paths:
           - vault-init
 workflows:
@@ -39,6 +39,4 @@ workflows:
             branches:
               only: /main/
           config_file: .circleci/.releaserc.yml
-          steps:
-            - attach_workspace:
-              at: /tmp/repo
+          attach_project: true
