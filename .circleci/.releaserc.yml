@@ -8,7 +8,7 @@ plugins:
       "@semantic-release/github",
       {
         "assets": [
-          { "path": "vault-init", "label": "~/project/vault-init" }
+          { "path": "vault-init", "label": "vault-init_linux_amd64" }
         ]
       }
   ]
