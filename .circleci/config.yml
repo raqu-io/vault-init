@@ -22,9 +22,9 @@ jobs:
           name: Build binary
           command: CGO_ENABLE=0 GOOS=linux go build -o vault-init -v .
       - persist_to_workspace:
-          root: ~/project
+          root: .
           paths:
-            - vault-init
+            - .
 workflows:
   build_and_tag:
     jobs:
