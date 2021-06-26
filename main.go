@@ -47,12 +47,12 @@ type InitResponse struct {
 func main() {
 	log.Println("Starting the vault-init service...")
 
-	vaultAddr = os.Getenv("VAULT_ADDR")
+	vaultAddr = os.Getenv("VAULT_INIT_VAULT_ADDR")
 	if vaultAddr == "" {
 		vaultAddr = "https://127.0.0.1:8200"
 	}
 
-	checkInterval = os.Getenv("CHECK_INTERVAL")
+	checkInterval = os.Getenv("VAULT_INIT_CHECK_INTERVAL")
 	if checkInterval == "" {
 		checkInterval = "10"
 	}
@@ -64,12 +64,12 @@ func main() {
 
 	checkIntervalDuration := time.Duration(i) * time.Second
 
-	s3BucketName = os.Getenv("S3_BUCKET_NAME")
+	s3BucketName = os.Getenv("VAULT_INIT_S3_BUCKET_NAME")
 	if s3BucketName == "" {
 		log.Fatal("S3_BUCKET_NAME must be set and not empty")
 	}
 
-	kmsKeyId = os.Getenv("KMS_KEY_ID")
+	kmsKeyId = os.Getenv("VAULT_INIT_KMS_KEY_ID")
 	if kmsKeyId == "" {
 		log.Fatal("KMS_KEY_ID must be set and not empty")
 	}
