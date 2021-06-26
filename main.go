@@ -9,7 +9,6 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -33,8 +32,8 @@ var (
 
 // InitRequest holds a Vault init request.
 type InitRequest struct {
-	SecretShares    int `json:"secret_shares"`
-	SecretThreshold int `json:"secret_threshold"`
+	RecoveryShares    int `json:"recovery_shares"`
+	RecoveryThreshold int `json:"recovery_threshold"`
 }
 
 // InitResponse holds a Vault init response.
@@ -114,15 +113,17 @@ func main() {
 		switch response.StatusCode {
 		case 200:
 			log.Println("Vault is initialized and unsealed.")
+			os.Exit(0)
 		case 429:
 			log.Println("Vault is unsealed and in standby mode.")
+			os.Exit(0)
 		case 501:
 			log.Println("Vault is not initialized. Initializing and unsealing...")
 			initialize()
-			unseal()
+			os.Exit(0)
 		case 503:
-			log.Println("Vault is sealed. Unsealing...")
-			unseal()
+			log.Println("Vault is initialized and sealed.")
+			os.Exit(0)
 		default:
 			log.Printf("Vault is in an unknown state. Status code: %d", response.StatusCode)
 		}
@@ -133,9 +134,10 @@ func main() {
 }
 
 func initialize() {
+	// TODO: allow to be set through env
 	initRequest := InitRequest{
-		SecretShares:    5,
-		SecretThreshold: 3,
+		RecoveryShares:    5,
+		RecoveryThreshold: 3,
 	}
 
 	initRequestData, err := json.Marshal(&initRequest)
@@ -233,107 +235,4 @@ func initialize() {
 	}
 
 	log.Println("Initialization complete.")
-}
-
-func unseal() {
-
-	AWSSession, err := session.NewSession()
-	if err != nil {
-		log.Println("Error creating session: ", err)
-	}
-
-	KMSService := kms.New(AWSSession)
-	S3Service := s3.New(AWSSession)
-
-	unsealKeysRequest := &s3.GetObjectInput{
-		Bucket: aws.String(s3BucketName),
-		Key:    aws.String("unseal-keys.json.enc"),
-	}
-
-	unsealKeysEncryptedObject, err := S3Service.GetObject(unsealKeysRequest)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	unsealKeysEncryptedObjectData, err := ioutil.ReadAll(unsealKeysEncryptedObject.Body)
-	if err != nil {
-		log.Println(err)
-	}
-
-	unsealKeysData, err := KMSService.Decrypt(&kms.DecryptInput{
-		CiphertextBlob: unsealKeysEncryptedObjectData,
-	})
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	var initResponse InitResponse
-
-	unsealKeysPlaintext, err := base64.StdEncoding.DecodeString(string(unsealKeysData.Plaintext))
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	if err := json.Unmarshal(unsealKeysPlaintext, &initResponse); err != nil {
-		log.Println(err)
-		return
-	}
-
-	for _, key := range initResponse.KeysBase64 {
-		done, err := unsealOne(key)
-		if done {
-			return
-		}
-
-		if err != nil {
-			log.Println(err)
-			return
-		}
-	}
-}
-
-func unsealOne(key string) (bool, error) {
-	unsealRequest := UnsealRequest{
-		Key: key,
-	}
-
-	unsealRequestData, err := json.Marshal(&unsealRequest)
-	if err != nil {
-		return false, err
-	}
-
-	r := bytes.NewReader(unsealRequestData)
-	request, err := http.NewRequest(http.MethodPut, vaultAddr+"/v1/sys/unseal", r)
-	if err != nil {
-		return false, err
-	}
-
-	response, err := httpClient.Do(request)
-	if err != nil {
-		return false, err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != 200 {
-		return false, fmt.Errorf("unseal: non-200 status code: %d", response.StatusCode)
-	}
-
-	unsealRequestResponseBody, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return false, err
-	}
-
-	var unsealResponse UnsealResponse
-	if err := json.Unmarshal(unsealRequestResponseBody, &unsealResponse); err != nil {
-		return false, err
-	}
-
-	if !unsealResponse.Sealed {
-		return true, nil
-	}
-
-	return false, nil
 }
