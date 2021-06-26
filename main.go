@@ -69,6 +69,11 @@ func main() {
 		log.Fatal("S3_BUCKET_NAME must be set and not empty")
 	}
 
+	kmsKeyId = os.Getenv("KMS_KEY_ID")
+	if kmsKeyId == "" {
+		log.Fatal("KMS_KEY_ID must be set and not empty")
+	}
+
 	timeout := 2 * time.Second
 	
 	httpClient = http.Client{
