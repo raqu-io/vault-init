@@ -64,14 +64,14 @@ func main() {
 
 	checkIntervalDuration := time.Duration(i) * time.Second
 
-	s3BucketName = os.Getenv("VAULT_INIT_S3_BUCKET_NAME")
+	s3BucketName = os.Getenv("VAULT_S3_BUCKET_NAME")
 	if s3BucketName == "" {
-		log.Fatal("S3_BUCKET_NAME must be set and not empty")
+		log.Fatal("VAULT_S3_BUCKET_NAME must be set and not empty")
 	}
 
-	kmsKeyId = os.Getenv("VAULT_INIT_KMS_KEY_ID")
+	kmsKeyId = os.Getenv("VAULT_KMS_KEY_ID")
 	if kmsKeyId == "" {
-		log.Fatal("KMS_KEY_ID must be set and not empty")
+		log.Fatal("VAULT_KMS_KEY_ID must be set and not empty")
 	}
 
 	timeout := 2 * time.Second
