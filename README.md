@@ -1,10 +1,11 @@
 # vault-init
 
-This is a port of [Kelsey Hightower](https://github.com/kelseyhightower) [vault-init](https://github.com/kelseyhightower/vault-init) to AWS.
+This is a port/adaptation of [Kelsey Hightower](https://github.com/kelseyhightower) [vault-init](https://github.com/kelseyhightower/vault-init) to AWS.
 
 The `vault-init` service automates the process of [initializing](https://www.vaultproject.io/docs/commands/operator/init.html) HashiCorp Vault instances running on [Amazon Web Services](http://aws.amazon.com/).
 
-After `vault-init` initializes a Vault server it stores master keys and root tokens (encrypted using [AWS Key Management Service](https://aws.amazon.com/kms/)) , to a user defined [Amazon S3](https://aws.amazon.com/s3/) bucket.
+After `vault-init` initializes a Vault server it stores master keys and root tokens to a user defined [SSM Path](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) with a custom KMS key.
+
 
 This port has been modified accordingly to rely on Vault auto unseal mechanism using KMS, easing the operation of Vault and only taking care of the initialize process.
 ## Usage
@@ -16,7 +17,7 @@ The `vault-init` service is designed to be run alongside a Vault server and comm
 The vault-init service supports the following environment variables for configuration:
 
 * `CHECK_INTERVAL` - The time in seconds between Vault health checks. (300)
-* `S3_BUCKET_NAME` - The Amazon S3 Bucket where the vault master key and root token is stored.
+* `SSM_SUFFIX` - The Suffix to store the vault master key and root token in SSM.
 * `KMS_KEY_ID` - The Amazon KMS key ID used to encrypt and decrypt the vault master key and root token.
 * `VAULT_ADDR` - The vault API address.
 
@@ -24,7 +25,7 @@ The vault-init service supports the following environment variables for configur
 
 ```
 CHECK_INTERVAL="300"
-S3_BUCKET_NAME="vault-storage"
+SSM_SUFFIX="DC1_TEST"
 KMS_KEY_ID="arn:aws:kms:us-east-1:1234567819:key/dead-beef-dead-beef-deadbeefdead"
 VAULT_ADDR="https://vault.service.consul:8200"
 ```
@@ -33,7 +34,6 @@ VAULT_ADDR="https://vault.service.consul:8200"
 
 The `vault-init` service needs the following set of resources:
 
-- S3 Bucket
 - IAM Role + Instance Profile
 - KMS Key
 
@@ -92,10 +92,6 @@ resource "aws_kms_alias" "vault" {
   target_key_id = "${aws_kms_key.vault.key_id}"
 }
 
-resource "aws_s3_bucket" "vault" {
-  acl = "private"
-}
-
 resource "aws_iam_role_policy" "vault" {
   role	 = "${aws_iam_role.vault.id}"
   policy = <<EOF
@@ -114,14 +110,12 @@ resource "aws_iam_role_policy" "vault" {
       "Resource": "${aws_kms_alias.vault.arn}"
     },
     {
-      "Action": "s3:ListBucket",
+      "Action": [
+        "ssm:PutParameter",
+        "ssm:GetParameter",
+      ],
       "Effect": "Allow",
-      "Resource": "${aws_s3_bucket.vault.arn}"
-    },
-    {
-      "Action": ["s3:GetObject", "s3:PutObject"],
-      "Effect": "Allow",
-      "Resource": "${aws_s3_bucket.vault.arn}/*"
+      "Resource": "ssm://VAULT/*"
     }
   ]
 }

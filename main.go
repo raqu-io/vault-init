@@ -7,7 +7,10 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"github.com/aws/aws-sdk-go/service/kms"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -17,14 +20,15 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/kms"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/ssm"
 )
 
 var (
 	vaultAddr     string
 	checkInterval string
-	s3BucketName  string
+	ssmSuffix     string
+	ssmKeysPath   string
+	ssmTokenPath  string
 	httpClient    http.Client
 	kmsKeyId      string
 )
@@ -42,6 +46,20 @@ type InitResponse struct {
 	RecoveryKeys       []string `json:"recovery_keys"`
 	RecoveryKeysBase64 []string `json:"recovery_keys_base64"`
 	RootToken          string   `json:"root_token"`
+}
+
+// UnsealRequest holds a Vault unseal request.
+type UnsealRequest struct {
+	Key   string `json:"key"`
+	Reset bool   `json:"reset"`
+}
+
+// UnsealResponse holds a Vault unseal response.
+type UnsealResponse struct {
+	Sealed   bool `json:"sealed"`
+	T        int  `json:"t"`
+	N        int  `json:"n"`
+	Progress int  `json:"progress"`
 }
 
 func main() {
@@ -64,18 +82,21 @@ func main() {
 
 	checkIntervalDuration := time.Duration(i) * time.Second
 
-	s3BucketName = os.Getenv("VAULT_S3_BUCKET_NAME")
-	if s3BucketName == "" {
-		log.Fatal("VAULT_S3_BUCKET_NAME must be set and not empty")
+	ssmSuffix = os.Getenv("SSM_SUFFIX")
+	if ssmSuffix == "" {
+		log.Fatal("SSM_PREFIX must be set and not empty")
 	}
 
-	kmsKeyId = os.Getenv("VAULT_KMS_KEY_ID")
+	ssmKeysPath = "/VAULT/" + ssmSuffix + "/UNSEAL_KEYS"
+	ssmTokenPath = "/VAULT/" + ssmSuffix + "/ROOT_TOKEN"
+
+	kmsKeyId = os.Getenv("KMS_KEY_ID")
 	if kmsKeyId == "" {
 		log.Fatal("VAULT_KMS_KEY_ID must be set and not empty")
 	}
 
 	timeout := 2 * time.Second
-	
+
 	httpClient = http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
@@ -128,7 +149,6 @@ func initialize() {
 	}
 
 	KMSService := kms.New(AWSSession)
-	S3Service := s3.New(AWSSession)
 
 	_, err = KMSService.Encrypt(&kms.EncryptInput{
 		KeyId:     aws.String(kmsKeyId),
@@ -137,17 +157,6 @@ func initialize() {
 	if err != nil {
 		log.Println("Error with KMS permissions: ", err)
 		os.Exit(1)
-	}
-
-	testS3PermissionUpload := &s3.PutObjectInput{
-		Body:   bytes.NewReader([]byte("foobar")),
-		Bucket: aws.String(s3BucketName),
-		Key:    aws.String("test-upload-permissions.txt"),
-	}
-
-	_, err = S3Service.PutObject(testS3PermissionUpload)
-	if err != nil {
-		log.Printf("Cannot write to bucket s3://%s/%s: %s", s3BucketName, "test-upload-permissions.txt", err)
 	}
 
 	// TODO: allow to be set through env
@@ -194,48 +203,129 @@ func initialize() {
 		return
 	}
 
-	log.Println("Encrypting the root token and uploading to bucket...")
+	log.Println("Encrypting unseal keys and the root token and uploading to ssm...")
 
-	// Encrypt root token.
-	rootTokenEncryptedData, err := KMSService.Encrypt(&kms.EncryptInput{
-		KeyId:     aws.String(kmsKeyId),
-		Plaintext: []byte(initResponse.RootToken),
-	})
-	if err != nil {
-		log.Println("Error encrypting root token: ", err)
-	}
+	SSMService := ssm.New(AWSSession)
 
 	// Save the encrypted root token.
-	rootTokenPutRequest := &s3.PutObjectInput{
-		Body:   bytes.NewReader(rootTokenEncryptedData.CiphertextBlob),
-		Bucket: aws.String(s3BucketName),
-		Key:    aws.String("root-token.json.enc"),
+	rootTokenPutRequest := &ssm.PutParameterInput {
+		Name: aws.String(ssmTokenPath),
+		Type: aws.String("SecureString"),
+		Value: aws.String(string([]byte(initResponse.RootToken))),
+		Overwrite: aws.Bool(true),
+		KeyId: aws.String(kmsKeyId),
 	}
 
-	_, err = S3Service.PutObject(rootTokenPutRequest)
+	_, err = SSMService.PutParameter(rootTokenPutRequest)
 	if err != nil {
-		log.Printf("Cannot write root token to bucket s3://%s/%s: %s", s3BucketName, "root-token.json.enc", err)
+		log.Printf("Cannot write root token to ssm at ssm://%s: %s", ssmTokenPath, err)
 	} else {
-		log.Printf("Root token written to s3://%s/%s", s3BucketName, "root-token.json.enc")
+		log.Printf("Root token written to ssm://%s", ssmTokenPath)
 	}
 
-	// Save the encrypted recovery keys.
-	byteKeys, err := json.Marshal(initResponse.RecoveryKeys)
-	if err != nil {
-		log.Println("Error reading recoveryKeys: ", err)
-	}
-	recoveryKeysRequest := &s3.PutObjectInput{
-		Body:   bytes.NewReader(byteKeys),
-		Bucket: aws.String(s3BucketName),
-		Key:    aws.String("unseal-keys.json.enc"),
+	// Save the encrypted unseal keys.
+	unsealKeysEncryptRequest := &ssm.PutParameterInput {
+		Name: aws.String(ssmKeysPath),
+		Type: aws.String("SecureString"),
+		Value: aws.String(base64.StdEncoding.EncodeToString(initRequestResponseBody)),
+		Overwrite: aws.Bool(true),
+		KeyId: aws.String(kmsKeyId),
 	}
 
-	_, err = S3Service.PutObject(recoveryKeysRequest)
+	_, err = SSMService.PutParameter(unsealKeysEncryptRequest)
 	if err != nil {
-		log.Printf("Cannot write unseal keys to bucket s3://%s/%s: %s", s3BucketName, "unseal-keys.json.enc", err)
+		log.Printf("Cannot write unseal keys to ssm at ssm://%s: %s", ssmKeysPath, err)
 	} else {
-		log.Printf("Unseal keys written to s3://%s/%s", s3BucketName, "unseal-keys.json.enc")
+		log.Printf("Unseal keys written to ssm://%s", ssmKeysPath)
 	}
 
 	log.Println("Initialization complete.")
+}
+
+func unseal() {
+
+	AWSSession, err := session.NewSession()
+	if err != nil {
+		log.Println("Error creating session: ", err)
+	}
+
+	SSMService := ssm.New(AWSSession)
+
+	unsealKeysRequest := &ssm.GetParameterInput{
+		Name: aws.String(ssmKeysPath),
+		WithDecryption: aws.Bool(true),
+	}
+
+	unsealKeysData, err := SSMService.GetParameter(unsealKeysRequest)
+	if err != nil {
+		log.Printf("Cannot read unseal keys from ssm at ssm://%s: %s", ssmKeysPath, err)
+	}
+
+	var initResponse InitResponse
+
+	unsealKeysPlaintext, err := base64.StdEncoding.DecodeString(*unsealKeysData.Parameter.Value)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	if err := json.Unmarshal(unsealKeysPlaintext, &initResponse); err != nil {
+		log.Println(err)
+		return
+	}
+
+	for _, key := range initResponse.KeysBase64 {
+		done, err := unsealOne(key)
+		if done {
+			return
+		}
+
+		if err != nil {
+			log.Println(err)
+			return
+		}
+	}
+}
+
+func unsealOne(key string) (bool, error) {
+	unsealRequest := UnsealRequest{
+		Key: key,
+	}
+
+	unsealRequestData, err := json.Marshal(&unsealRequest)
+	if err != nil {
+		return false, err
+	}
+
+	r := bytes.NewReader(unsealRequestData)
+	request, err := http.NewRequest(http.MethodPut, vaultAddr+"/v1/sys/unseal", r)
+	if err != nil {
+		return false, err
+	}
+
+	response, err := httpClient.Do(request)
+	if err != nil {
+		return false, err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != 200 {
+		return false, fmt.Errorf("unseal: non-200 status code: %d", response.StatusCode)
+	}
+
+	unsealRequestResponseBody, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return false, err
+	}
+
+	var unsealResponse UnsealResponse
+	if err := json.Unmarshal(unsealRequestResponseBody, &unsealResponse); err != nil {
+		return false, err
+	}
+
+	if !unsealResponse.Sealed {
+		return true, nil
+	}
+
+	return false, nil
 }
