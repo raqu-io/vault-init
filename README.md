@@ -18,7 +18,7 @@ The vault-init service supports the following environment variables for configur
 
 * `VAULT_INIT_CHECK_INTERVAL` - The time in seconds between Vault health checks. (300)
 * `VAULT_INIT_SSM_SUFFIX` - The Suffix to store the vault master key and root token in SSM.
-* `VAULT_INIT_KMS_KEY_ID` - The Amazon KMS key ID used to encrypt and decrypt the vault master key and root token.
+* `VAULT_KMS_KEY_ID` - The Amazon KMS key ID used to encrypt and decrypt the vault master key and root token.
 * `VAULT_INIT_VAULT_ADDR` - The vault API address.
 
 ### Example Values
@@ -26,7 +26,7 @@ The vault-init service supports the following environment variables for configur
 ```
 VAULT_INIT_CHECK_INTERVAL="300"
 VAULT_INIT_SSM_SUFFIX="DC1_TEST"
-VAULT_INIT_KMS_KEY_ID="arn:aws:kms:us-east-1:1234567819:key/dead-beef-dead-beef-deadbeefdead"
+VAULT_KMS_KEY_ID="arn:aws:kms:us-east-1:1234567819:key/dead-beef-dead-beef-deadbeefdead"
 VAULT_INIT_VAULT_ADDR="https://vault.service.consul:8200"
 ```
 
