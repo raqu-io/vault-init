@@ -1,6 +1,6 @@
 version: 2.1
 orbs:
-  semantic-release: proxyco/semantic-release@3.0.0
+  semantic-release: proxyco/semantic-release@4.0.0
 jobs:
   build:
     working_directory: ~/project
