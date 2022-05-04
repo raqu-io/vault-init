@@ -17,7 +17,6 @@ plugins:
       "semantic-release-slack-bot",
       {
         "notifyOnSuccess": true,
-        "notifyOnFail": true,
-        "slackWebhook": "https://hooks.slack.com/services/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"
+        "notifyOnFail": true
       }
   ]
