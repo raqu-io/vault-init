@@ -82,17 +82,17 @@ func main() {
 
 	checkIntervalDuration := time.Duration(i) * time.Second
 
-	ssmSuffix = os.Getenv("SSM_SUFFIX")
+	ssmSuffix = os.Getenv("VAULT_INIT_SSM_SUFFIX")
 	if ssmSuffix == "" {
-		log.Fatal("SSM_PREFIX must be set and not empty")
+		log.Fatal("VAULT_INIT_SSM_SUFFIX must be set and not empty")
 	}
 
 	ssmKeysPath = "/VAULT/" + ssmSuffix + "/UNSEAL_KEYS"
 	ssmTokenPath = "/VAULT/" + ssmSuffix + "/ROOT_TOKEN"
 
-	kmsKeyId = os.Getenv("KMS_KEY_ID")
+	kmsKeyId = os.Getenv("VAULT_INIT_KMS_KEY_ID")
 	if kmsKeyId == "" {
-		log.Fatal("VAULT_KMS_KEY_ID must be set and not empty")
+		log.Fatal("VAULT_INIT_KMS_KEY_ID must be set and not empty")
 	}
 
 	timeout := 2 * time.Second
