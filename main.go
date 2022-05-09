@@ -25,7 +25,6 @@ import (
 var (
 	vaultAddr     string
 	checkInterval string
-	ssmSuffix     string
 	ssmKeysPath   string
 	ssmTokenPath  string
 	httpClient    http.Client
@@ -81,13 +80,15 @@ func main() {
 
 	checkIntervalDuration := time.Duration(i) * time.Second
 
-	ssmSuffix = os.Getenv("VAULT_INIT_SSM_SUFFIX")
-	if ssmSuffix == "" {
-		log.Fatal("VAULT_INIT_SSM_SUFFIX must be set and not empty")
+	ssmTokenPath = os.Getenv("VAULT_INIT_ROOT_TOKEN_SSM_PATH")
+	if ssmTokenPath == "" {
+		log.Fatal("VAULT_INIT_ROOT_TOKEN_SSM_PATH must be set and not empty")
 	}
 
-	ssmKeysPath = "/VAULT/" + ssmSuffix + "/UNSEAL_KEYS"
-	ssmTokenPath = "/VAULT/" + ssmSuffix + "/ROOT_TOKEN"
+	ssmKeysPath = os.Getenv("VAULT_INIT_UNSEAL_KEYS_SSM_PATH")
+	if ssmKeysPath == "" {
+		log.Fatal("VAULT_INIT_UNSEAL_KEYS_SSM_PATH must be set and not empty")
+	}
 
 	kmsKeyId = os.Getenv("VAULT_KMS_KEY_ID")
 	if kmsKeyId == "" {
