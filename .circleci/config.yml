@@ -3,6 +3,7 @@ orbs:
   semantic-release: proxyco/semantic-release@4.0.0
 jobs:
   build:
+    context: global-vars
     working_directory: ~/project
     docker:
       - image: circleci/golang:1.15.3
